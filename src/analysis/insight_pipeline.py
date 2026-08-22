@@ -4,6 +4,11 @@ from src.drivers.contributions import RevenueContributionEngine
 from src.drivers.revenue_tree import RevenueDriverTree
 from src.drivers.drivers_registry import DriverRegistry
 
+from src.analysis.result import (
+    AnalysisResult,
+    DriverResult,
+)
+
 
 class InsightPipeline:
     """
@@ -19,10 +24,20 @@ class InsightPipeline:
              ↓
         Contribution
              ↓
-        Investigation Output
+        Drill-down / Investigation
+             ↓
+        AnalysisResult
 
-    This layer coordinates existing analytical components.
+    This class coordinates the existing analytical components.
     It does not duplicate their calculations.
+
+    Current fully implemented analytical path:
+
+        Revenue → Region → Period Comparison
+                → Materiality
+                → Driver Decomposition
+                → Contribution
+                → Structured Result
     """
 
     def __init__(
@@ -73,7 +88,11 @@ class InsightPipeline:
     ):
         """
         Calculate the KPI movement for the requested entity
-        and periods.
+        across the two requested periods.
+
+        This answers:
+
+            "What changed?"
         """
 
         return self.snapshot.compare_periods(
@@ -95,8 +114,12 @@ class InsightPipeline:
         expected_change_pct=None,
     ):
         """
-        Determine whether the KPI movement warrants
-        investigation.
+        Determine whether the observed KPI movement
+        warrants investigation.
+
+        This answers:
+
+            "Is the change significant enough to investigate?"
         """
 
         return self.materiality.evaluate(
@@ -116,10 +139,18 @@ class InsightPipeline:
         current_period,
     ):
         """
-        Perform revenue driver decomposition.
+        Perform revenue driver decomposition and
+        contribution analysis.
 
-        Revenue is currently the first KPI with a fully
-        implemented driver contribution engine.
+        Current revenue driver structure:
+
+            Revenue
+              ├── Customers
+              ├── Orders per Customer
+              └── AOV
+
+        The contribution engine determines how much
+        each driver contributed to the overall movement.
         """
 
         comparison = (
@@ -142,7 +173,142 @@ class InsightPipeline:
         }
 
     # ==========================================================
-    # MAIN PIPELINE
+    # BUILD STANDARDIZED RESULT
+    # ==========================================================
+
+    def _build_result(
+        self,
+        snapshot,
+        materiality,
+        investigation=None,
+    ):
+        """
+        Convert internal pipeline output into the stable
+        AnalysisResult contract.
+
+        This is the boundary between Person 1's analytical
+        engine and downstream reasoning/evidence components.
+        """
+
+        drivers = []
+
+        primary_driver = None
+
+        # ------------------------------------------------------
+        # Extract quantified drivers
+        # ------------------------------------------------------
+
+        if investigation:
+
+            contribution = investigation.get(
+                "contribution"
+            )
+
+            if contribution:
+
+                raw_drivers = contribution.get(
+                    "drivers",
+                    []
+                )
+
+                drivers = [
+                    DriverResult.from_dict(
+                        driver
+                    )
+                    for driver in raw_drivers
+                ]
+
+                # --------------------------------------------------
+                # Primary driver
+                # --------------------------------------------------
+
+                raw_primary = contribution.get(
+                    "primary_driver"
+                )
+
+                if raw_primary:
+
+                    primary_driver = (
+                        DriverResult(
+                            name=raw_primary["name"],
+                            label=raw_primary["label"],
+                            previous_value=raw_primary.get(
+                                "previous_value"
+                            ),
+                            current_value=raw_primary.get(
+                                "current_value"
+                            ),
+                            change_pct=raw_primary.get(
+                                "change_pct"
+                            ),
+                            contribution_pp=raw_primary.get(
+                                "contribution_pp"
+                            ),
+                            rank=raw_primary.get(
+                                "rank"
+                            ),
+                        )
+                    )
+
+        # ------------------------------------------------------
+        # Build standardized result
+        # ------------------------------------------------------
+
+        return AnalysisResult(
+
+            kpi=snapshot["kpi"],
+
+            entity_dimension=snapshot[
+                "entity_dimension"
+            ],
+
+            entity=snapshot[
+                "entity"
+            ],
+
+            previous_period=snapshot[
+                "previous_period"
+            ],
+
+            current_period=snapshot[
+                "current_period"
+            ],
+
+            previous_value=snapshot[
+                "previous_value"
+            ],
+
+            current_value=snapshot[
+                "current_value"
+            ],
+
+            absolute_change=snapshot[
+                "absolute_change"
+            ],
+
+            change_pct=snapshot[
+                "change_pct"
+            ],
+
+            direction=snapshot[
+                "direction"
+            ],
+
+            is_material=materiality[
+                "is_material"
+            ],
+
+            decision=materiality[
+                "decision"
+            ],
+
+            drivers=drivers,
+
+            primary_driver=primary_driver,
+        )
+
+    # ==========================================================
+    # MAIN ANALYSIS PIPELINE
     # ==========================================================
 
     def analyze(
@@ -155,37 +321,49 @@ class InsightPipeline:
         expected_change_pct=None,
     ):
         """
-        Run the InsightFlow analytical pipeline.
+        Run the complete InsightFlow analytical pipeline.
 
         Parameters
         ----------
         kpi_name : str
-            KPI to investigate.
+            Registered KPI to investigate.
 
         entity_dimension : str
             Dimension identifying the entity.
 
+            Example:
+                "region"
+
         entity_value : str
             Entity being investigated.
 
+            Example:
+                "Region A"
+
         previous_period : str
-            Earlier period.
+            Earlier reporting period.
+
+            Example:
+                "2026-07"
 
         current_period : str
-            Current period.
+            Current reporting period.
+
+            Example:
+                "2026-08"
 
         expected_change_pct : float, optional
             Expected percentage movement.
 
         Returns
         -------
-        dict
-            Structured analytical output.
+        AnalysisResult
+            Standardized analytical result.
         """
 
-        # ------------------------------------------------------
-        # 1. WHAT CHANGED?
-        # ------------------------------------------------------
+        # ======================================================
+        # STEP 1 — WHAT CHANGED?
+        # ======================================================
 
         snapshot = self._get_snapshot(
             kpi_name=kpi_name,
@@ -195,35 +373,54 @@ class InsightPipeline:
             current_period=current_period,
         )
 
-        change_pct = snapshot["change_pct"]
+        change_pct = snapshot[
+            "change_pct"
+        ]
 
-        # ------------------------------------------------------
-        # Handle undefined percentage change
-        # ------------------------------------------------------
+        # ======================================================
+        # STEP 2 — HANDLE UNDEFINED BASELINE
+        # ======================================================
 
         if change_pct is None:
 
-            return {
-                "kpi": kpi_name,
-                "entity_dimension": entity_dimension,
-                "entity": entity_value,
+            return AnalysisResult(
 
-                "previous_period": previous_period,
-                "current_period": current_period,
+                kpi=kpi_name,
 
-                "snapshot": snapshot,
+                entity_dimension=entity_dimension,
 
-                "materiality": {
-                    "is_material": False,
-                    "decision": "INSUFFICIENT_BASELINE",
-                },
+                entity=entity_value,
 
-                "investigation": None,
-            }
+                previous_period=previous_period,
 
-        # ------------------------------------------------------
-        # 2. IS THE CHANGE MATERIAL?
-        # ------------------------------------------------------
+                current_period=current_period,
+
+                previous_value=snapshot[
+                    "previous_value"
+                ],
+
+                current_value=snapshot[
+                    "current_value"
+                ],
+
+                absolute_change=snapshot[
+                    "absolute_change"
+                ],
+
+                change_pct=None,
+
+                direction=snapshot[
+                    "direction"
+                ],
+
+                is_material=False,
+
+                decision="INSUFFICIENT_BASELINE",
+            )
+
+        # ======================================================
+        # STEP 3 — IS THE CHANGE MATERIAL?
+        # ======================================================
 
         materiality = self._evaluate_materiality(
             kpi_name=kpi_name,
@@ -231,42 +428,38 @@ class InsightPipeline:
             expected_change_pct=expected_change_pct,
         )
 
-        # ------------------------------------------------------
-        # 3. STOP IF NOT MATERIAL
-        # ------------------------------------------------------
+        # ======================================================
+        # STEP 4 — STOP IF NOT MATERIAL
+        # ======================================================
 
-        if not materiality["is_material"]:
+        if not materiality[
+            "is_material"
+        ]:
 
-            return {
-                "kpi": kpi_name,
-                "entity_dimension": entity_dimension,
-                "entity": entity_value,
+            return self._build_result(
+                snapshot=snapshot,
+                materiality=materiality,
+                investigation=None,
+            )
 
-                "previous_period": previous_period,
-                "current_period": current_period,
-
-                "snapshot": snapshot,
-
-                "materiality": materiality,
-
-                "investigation": None,
-
-                "decision": "NO_INVESTIGATION",
-            }
-
-        # ------------------------------------------------------
-        # 4. INVESTIGATE
-        # ------------------------------------------------------
+        # ======================================================
+        # STEP 5 — INVESTIGATE MATERIAL CHANGE
+        # ======================================================
 
         investigation = None
+
+        # ------------------------------------------------------
+        # Revenue
+        # ------------------------------------------------------
 
         if kpi_name == "revenue":
 
             if entity_dimension != "region":
 
                 raise ValueError(
-                    "The current revenue driver implementation "
-                    "requires region-level analysis."
+                    "The current revenue driver "
+                    "implementation requires "
+                    "region-level analysis."
                 )
 
             investigation = (
@@ -277,13 +470,11 @@ class InsightPipeline:
                 )
             )
 
-        else:
+        # ------------------------------------------------------
+        # Other registered KPIs
+        # ------------------------------------------------------
 
-            # --------------------------------------------------
-            # Driver metadata is available for all registered
-            # KPIs, but full contribution analysis is currently
-            # implemented only for Revenue.
-            # --------------------------------------------------
+        else:
 
             investigation = {
                 "drivers": (
@@ -291,49 +482,18 @@ class InsightPipeline:
                         kpi_name
                     )
                 ),
-                "status": "DRIVER_ANALYSIS_NOT_IMPLEMENTED",
+
+                "status": (
+                    "DRIVER_ANALYSIS_NOT_IMPLEMENTED"
+                ),
             }
 
-        # ------------------------------------------------------
-        # 5. FINAL STRUCTURED OUTPUT
-        # ------------------------------------------------------
+        # ======================================================
+        # STEP 6 — BUILD FINAL ANALYSIS RESULT
+        # ======================================================
 
-        result = {
-            "kpi": kpi_name,
-            "entity_dimension": entity_dimension,
-            "entity": entity_value,
-
-            "previous_period": previous_period,
-            "current_period": current_period,
-
-            "snapshot": snapshot,
-
-            "materiality": materiality,
-
-            "investigation": investigation,
-
-            "decision": "INVESTIGATE",
-        }
-
-        # ------------------------------------------------------
-        # Add primary driver when available
-        # ------------------------------------------------------
-
-        if (
-            investigation
-            and "contribution" in investigation
-        ):
-
-            contribution = (
-                investigation["contribution"]
-            )
-
-            result["primary_driver"] = (
-                contribution["primary_driver"]
-            )
-
-            result["drivers"] = (
-                contribution["drivers"]
-            )
-
-        return result
+        return self._build_result(
+            snapshot=snapshot,
+            materiality=materiality,
+            investigation=investigation,
+        )

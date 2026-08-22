@@ -4,6 +4,10 @@ from src.analysis.insight_pipeline import (
     InsightPipeline
 )
 
+from src.analysis.result import (
+    AnalysisResult
+)
+
 
 @pytest.fixture
 def pipeline():
@@ -26,25 +30,29 @@ def test_material_revenue_change(
         current_period="2026-08",
     )
 
-    assert result["kpi"] == "revenue"
+    assert isinstance(
+        result,
+        AnalysisResult
+    )
 
-    assert result["entity"] == "Region A"
+    assert result.kpi == "revenue"
+
+    assert result.entity_dimension == "region"
+
+    assert result.entity == "Region A"
 
     assert (
-        result["snapshot"]["change_pct"]
+        result.change_pct
         == pytest.approx(
             -5.59,
             abs=0.01
         )
     )
 
-    assert (
-        result["materiality"]["is_material"]
-        is True
-    )
+    assert result.is_material is True
 
     assert (
-        result["decision"]
+        result.decision
         == "INVESTIGATE"
     )
 
@@ -65,9 +73,16 @@ def test_revenue_primary_driver(
         current_period="2026-08",
     )
 
+    assert result.primary_driver is not None
+
     assert (
-        result["primary_driver"]["name"]
+        result.primary_driver.name
         == "aov"
+    )
+
+    assert (
+        result.primary_driver.label
+        == "AOV"
     )
 
 
@@ -87,12 +102,12 @@ def test_revenue_driver_contribution(
         current_period="2026-08",
     )
 
-    drivers = result["drivers"]
+    drivers = result.drivers
 
     assert len(drivers) == 3
 
     total_contribution = sum(
-        driver["contribution_pp"]
+        driver.contribution_pp
         for driver in drivers
     )
 
@@ -120,12 +135,12 @@ def test_aov_contribution(
 
     aov = next(
         driver
-        for driver in result["drivers"]
-        if driver["name"] == "aov"
+        for driver in result.drivers
+        if driver.name == "aov"
     )
 
     assert (
-        aov["contribution_pp"]
+        aov.contribution_pp
         < 0
     )
 
@@ -137,9 +152,6 @@ def test_aov_contribution(
 def test_non_material_change_stops_investigation(
     pipeline
 ):
-
-    # Revenue threshold = 3%.
-    # This change should not trigger investigation.
 
     result = pipeline.materiality.evaluate(
         kpi_name="revenue",
@@ -174,12 +186,9 @@ def test_expected_deviation_triggers_investigation(
         expected_change_pct=-1.0,
     )
 
-    assert (
-        result["materiality"]["is_material"]
-        is True
-    )
+    assert result.is_material is True
 
     assert (
-        result["decision"]
+        result.decision
         == "INVESTIGATE"
     )
