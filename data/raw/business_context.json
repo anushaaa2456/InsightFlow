@@ -1,0 +1,90 @@
+[
+  {
+    "date": "2026-08-05",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "customer_review",
+    "source": "Customer Review",
+    "text": "Customers reported difficulty finding premium products in stock."
+  },
+  {
+    "date": "2026-08-09",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "customer_review",
+    "source": "Customer Review",
+    "text": "Customers reported difficulty finding premium products in stock."
+  },
+  {
+    "date": "2026-08-13",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "customer_review",
+    "source": "Customer Review",
+    "text": "Customers reported difficulty finding premium products in stock."
+  },
+  {
+    "date": "2026-08-17",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "customer_review",
+    "source": "Customer Review",
+    "text": "Customers reported difficulty finding premium products in stock."
+  },
+  {
+    "date": "2026-08-21",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "customer_review",
+    "source": "Customer Review",
+    "text": "Customers reported difficulty finding premium products in stock."
+  },
+  {
+    "date": "2026-08-25",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "customer_review",
+    "source": "Customer Review",
+    "text": "Customers reported difficulty finding premium products in stock."
+  },
+  {
+    "date": "2026-08-08",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "competitor_news",
+    "source": "Market Intelligence",
+    "text": "Competitor X reduced prices on comparable premium products by approximately 10%."
+  },
+  {
+    "date": "2026-08-12",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "sales_note",
+    "source": "Regional Sales Team",
+    "text": "Sales representatives reported customers mentioning competitor pricing during purchase discussions."
+  },
+  {
+    "date": "2026-08-15",
+    "region": "Region A",
+    "product_category": "Premium",
+    "source_type": "sales_note",
+    "source": "Regional Sales Team",
+    "text": "Several premium SKUs were unavailable during customer purchase attempts."
+  },
+  {
+    "date": "2026-08-10",
+    "region": "Region B",
+    "product_category": null,
+    "source_type": "sales_note",
+    "source": "Regional Sales Team",
+    "text": "Sales activity remained broadly stable during the reporting period."
+  },
+  {
+    "date": "2026-08-10",
+    "region": "Region C",
+    "product_category": null,
+    "source_type": "customer_review",
+    "source": "Customer Review",
+    "text": "Customers reported generally positive product availability."
+  }
+]
