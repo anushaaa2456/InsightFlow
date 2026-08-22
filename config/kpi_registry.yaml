@@ -1,0 +1,89 @@
+version: "1.0"
+
+kpis:
+
+  revenue:
+
+    name: "Revenue"
+
+    description: >
+      Total realized sales revenue generated from completed transactions.
+
+    unit: "currency"
+
+    data_source:
+      file: "data/raw/transactions.csv"
+      table: "transactions"
+
+    calculation:
+      method: "sum"
+      column: "revenue"
+
+    grain:
+      base: "transaction"
+      reporting: "monthly"
+
+    dimensions:
+      - date
+      - region
+      - product
+      - channel
+      - customer_segment
+
+    comparison:
+      primary:
+        type: "period_over_period"
+        period: "month"
+
+      secondary:
+        - type: "historical_baseline"
+        - type: "peer_region"
+        - type: "expected"
+
+    materiality:
+      minimum_absolute_change_pct: 3.0
+      minimum_deviation_from_expected_pct: 2.0
+
+    drivers:
+
+      customers:
+        formula: "active_customers"
+
+        sub_drivers:
+          - acquisition
+          - churn
+          - active_customers
+
+      orders_per_customer:
+        formula: "orders / active_customers"
+
+        sub_drivers:
+          - purchase_frequency
+          - repeat_rate
+
+      aov:
+        formula: "revenue / orders"
+
+        sub_drivers:
+          - price
+          - discounting
+          - product_mix
+          - attach_rate
+
+    drill_down:
+      - region
+      - product
+      - channel
+      - customer_segment
+      - month
+
+    lineage:
+      source_type: "structured"
+      source_system: "transaction_system"
+      freshness: "daily"
+
+    output:
+      include_actual: true
+      include_expected: true
+      include_change_pct: true
+      include_contribution: true
