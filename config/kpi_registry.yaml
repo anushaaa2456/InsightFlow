@@ -2,6 +2,10 @@ version: "1.0"
 
 kpis:
 
+  # ============================================================
+  # 1. REVENUE
+  # ============================================================
+
   revenue:
 
     name: "Revenue"
@@ -80,6 +84,360 @@ kpis:
     lineage:
       source_type: "structured"
       source_system: "transaction_system"
+      freshness: "daily"
+
+    output:
+      include_actual: true
+      include_expected: true
+      include_change_pct: true
+      include_contribution: true
+
+
+  # ============================================================
+  # 2. CUSTOMERS
+  # ============================================================
+
+  customers:
+
+    name: "Customers"
+
+    description: >
+      Number of unique customers generating at least one completed
+      transaction during the reporting period.
+
+    unit: "count"
+
+    data_source:
+      file: "data/raw/transactions.csv"
+      table: "transactions"
+
+    calculation:
+      method: "nunique"
+      column: "customer_id"
+
+    grain:
+      base: "customer"
+      reporting: "monthly"
+
+    dimensions:
+      - date
+      - region
+      - product
+      - channel
+      - customer_segment
+
+    comparison:
+      primary:
+        type: "period_over_period"
+        period: "month"
+
+      secondary:
+        - type: "historical_baseline"
+        - type: "peer_region"
+        - type: "expected"
+
+    materiality:
+      minimum_absolute_change_pct: 3.0
+      minimum_deviation_from_expected_pct: 2.0
+
+    drivers:
+
+      acquisition:
+        formula: "new_customers"
+
+        sub_drivers:
+          - new_customer_count
+          - acquisition_channel
+
+      churn:
+        formula: "lost_customers"
+
+        sub_drivers:
+          - inactive_customers
+          - churn_rate
+
+      active_customers:
+        formula: "nunique(customer_id)"
+
+        sub_drivers:
+          - retained_customers
+          - returning_customers
+
+    drill_down:
+      - region
+      - product
+      - channel
+      - customer_segment
+      - month
+
+    lineage:
+      source_type: "structured"
+      source_system: "transaction_system"
+      freshness: "daily"
+
+    output:
+      include_actual: true
+      include_expected: true
+      include_change_pct: true
+      include_contribution: true
+
+
+  # ============================================================
+  # 3. ORDERS
+  # ============================================================
+
+  orders:
+
+    name: "Orders"
+
+    description: >
+      Total number of completed orders during the reporting period.
+
+    unit: "count"
+
+    data_source:
+      file: "data/raw/transactions.csv"
+      table: "transactions"
+
+    calculation:
+      method: "sum"
+      column: "orders"
+
+    grain:
+      base: "transaction"
+      reporting: "monthly"
+
+    dimensions:
+      - date
+      - region
+      - product
+      - channel
+      - customer_segment
+
+    comparison:
+      primary:
+        type: "period_over_period"
+        period: "month"
+
+      secondary:
+        - type: "historical_baseline"
+        - type: "peer_region"
+        - type: "expected"
+
+    materiality:
+      minimum_absolute_change_pct: 3.0
+      minimum_deviation_from_expected_pct: 2.0
+
+    drivers:
+
+      customers:
+        formula: "active_customers"
+
+        sub_drivers:
+          - acquisition
+          - churn
+          - retained_customers
+
+      orders_per_customer:
+        formula: "orders / active_customers"
+
+        sub_drivers:
+          - purchase_frequency
+          - repeat_rate
+
+    drill_down:
+      - region
+      - product
+      - channel
+      - customer_segment
+      - month
+
+    lineage:
+      source_type: "structured"
+      source_system: "transaction_system"
+      freshness: "daily"
+
+    output:
+      include_actual: true
+      include_expected: true
+      include_change_pct: true
+      include_contribution: true
+
+
+  # ============================================================
+  # 4. AVERAGE ORDER VALUE
+  # ============================================================
+
+  aov:
+
+    name: "Average Order Value"
+
+    description: >
+      Average realized revenue generated per completed order
+      during the reporting period.
+
+    unit: "currency"
+
+    data_source:
+      file: "data/raw/transactions.csv"
+      table: "transactions"
+
+    calculation:
+      method: "ratio"
+      numerator: "revenue"
+      denominator: "orders"
+
+    grain:
+      base: "order"
+      reporting: "monthly"
+
+    dimensions:
+      - date
+      - region
+      - product
+      - channel
+      - customer_segment
+
+    comparison:
+      primary:
+        type: "period_over_period"
+        period: "month"
+
+      secondary:
+        - type: "historical_baseline"
+        - type: "peer_region"
+        - type: "expected"
+
+    materiality:
+      minimum_absolute_change_pct: 3.0
+      minimum_deviation_from_expected_pct: 2.0
+
+    drivers:
+
+      price:
+        formula: "revenue / units"
+
+        sub_drivers:
+          - realized_price
+          - pricing_change
+
+      discounting:
+        formula: "discount"
+
+        sub_drivers:
+          - discount_rate
+          - promotional_intensity
+
+      product_mix:
+        formula: "revenue_by_product_category"
+
+        sub_drivers:
+          - category_mix
+          - premium_mix
+
+      attach_rate:
+        formula: "addon_orders / base_orders"
+
+        sub_drivers:
+          - addon_penetration
+
+    drill_down:
+      - region
+      - product
+      - channel
+      - customer_segment
+      - month
+
+    lineage:
+      source_type: "structured"
+      source_system: "transaction_system"
+      freshness: "daily"
+
+    output:
+      include_actual: true
+      include_expected: true
+      include_change_pct: true
+      include_contribution: true
+
+
+  # ============================================================
+  # 5. INVENTORY AVAILABILITY
+  # ============================================================
+
+  inventory_availability:
+
+    name: "Inventory Availability"
+
+    description: >
+      Proportion of inventory records that are available
+      for sale during the reporting period.
+
+    unit: "percentage"
+
+    data_source:
+      file: "data/raw/operations.csv"
+      table: "operations"
+
+    calculation:
+      method: "ratio"
+      numerator: "inventory_available"
+      denominator: "inventory_capacity"
+
+    grain:
+      base: "product-region"
+      reporting: "monthly"
+
+    dimensions:
+      - date
+      - region
+      - product
+      - product_category
+      - month
+
+    comparison:
+      primary:
+        type: "period_over_period"
+        period: "month"
+
+      secondary:
+        - type: "historical_baseline"
+        - type: "peer_region"
+        - type: "expected"
+
+    materiality:
+      minimum_absolute_change_pct: 3.0
+      minimum_deviation_from_expected_pct: 2.0
+
+    drivers:
+
+      stockouts:
+        formula: "1 - availability"
+
+        sub_drivers:
+          - stockout_rate
+          - stockout_duration
+
+      product_availability:
+        formula: "availability_by_product"
+
+        sub_drivers:
+          - product_level_availability
+
+      regional_availability:
+        formula: "availability_by_region"
+
+        sub_drivers:
+          - regional_stockouts
+
+    drill_down:
+      - region
+      - product
+      - product_category
+      - month
+
+    lineage:
+      source_type: "structured"
+      source_system: "operations_system"
       freshness: "daily"
 
     output:
