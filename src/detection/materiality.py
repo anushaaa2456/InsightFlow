@@ -3,225 +3,227 @@ from src.kpi.registry import KPIRegistry
 
 class MaterialityEngine:
     """
-    Determines whether a KPI movement is materially different
-    from expected or normal performance.
+    Determines whether a KPI movement is materially significant
+    enough to warrant investigation.
 
-    This engine does not explain WHY the KPI moved.
-    It only determines whether the movement warrants investigation.
+    Materiality is based on the KPI's semantic configuration
+    in the registry.
+
+    Current rules:
+
+    1. Absolute period-over-period change exceeds the configured
+       minimum threshold.
+
+    2. Deviation from an expected value exceeds the configured
+       threshold.
+
+    The engine does not explain WHY a KPI changed.
+    It only determines WHETHER the movement deserves investigation.
     """
 
     def __init__(self, registry=None):
+
         self.registry = registry or KPIRegistry()
+
+    # ==========================================================
+    # CONFIGURATION
+    # ==========================================================
+
+    def get_rules(self, kpi_name):
+        """
+        Return the materiality rules configured for a KPI.
+        """
+
+        return self.registry.get_materiality_rules(
+            kpi_name
+        )
+
+    # ==========================================================
+    # PERIOD-OVER-PERIOD MATERIALITY
+    # ==========================================================
+
+    def check_change(
+        self,
+        kpi_name,
+        change_pct
+    ):
+        """
+        Determine whether a period-over-period change
+        is materially significant.
+
+        Parameters
+        ----------
+        kpi_name : str
+            Registered KPI.
+
+        change_pct : float
+            Percentage change between the current and
+            comparison period.
+
+        Returns
+        -------
+        dict
+            Structured materiality result.
+        """
+
+        rules = self.get_rules(
+            kpi_name
+        )
+
+        threshold = rules[
+            "minimum_absolute_change_pct"
+        ]
+
+        absolute_change = abs(
+            change_pct
+        )
+
+        is_material = (
+            absolute_change >= threshold
+        )
+
+        return {
+            "kpi": kpi_name,
+            "change_pct": change_pct,
+            "absolute_change_pct": absolute_change,
+            "threshold_pct": threshold,
+            "is_material": is_material,
+            "reason": (
+                f"Absolute change of "
+                f"{absolute_change:.2f}% "
+                f"{'meets' if is_material else 'does not meet'} "
+                f"the materiality threshold of "
+                f"{threshold:.2f}%."
+            )
+        }
+
+    # ==========================================================
+    # EXPECTED-VALUE MATERIALITY
+    # ==========================================================
+
+    def check_expected_deviation(
+        self,
+        kpi_name,
+        actual_change_pct,
+        expected_change_pct
+    ):
+        """
+        Determine whether actual KPI movement deviates
+        materially from the expected movement.
+
+        Example:
+
+            Actual:   -8%
+            Expected: -1%
+
+            Deviation = -7 percentage points
+
+        """
+
+        rules = self.get_rules(
+            kpi_name
+        )
+
+        threshold = rules[
+            "minimum_deviation_from_expected_pct"
+        ]
+
+        deviation = (
+            actual_change_pct
+            - expected_change_pct
+        )
+
+        absolute_deviation = abs(
+            deviation
+        )
+
+        is_material = (
+            absolute_deviation >= threshold
+        )
+
+        return {
+            "kpi": kpi_name,
+            "actual_change_pct": actual_change_pct,
+            "expected_change_pct": expected_change_pct,
+            "deviation_pct_points": deviation,
+            "threshold_pct_points": threshold,
+            "is_material": is_material,
+            "reason": (
+                f"Deviation of "
+                f"{absolute_deviation:.2f} percentage points "
+                f"{'meets' if is_material else 'does not meet'} "
+                f"the expected-deviation threshold of "
+                f"{threshold:.2f} percentage points."
+            )
+        }
+
+    # ==========================================================
+    # COMBINED DECISION
+    # ==========================================================
 
     def evaluate(
         self,
         kpi_name,
         change_pct,
-        expected_change_pct=None,
-        peer_changes=None,
+        expected_change_pct=None
     ):
         """
-        Evaluate whether a KPI movement is material.
+        Perform the complete materiality evaluation.
 
-        Parameters
-        ----------
-        kpi_name : str
-            Registered KPI name.
+        A KPI is considered material when:
 
-        change_pct : float
-            Observed percentage change.
+        - Its absolute change exceeds the configured
+          period-over-period threshold
 
-        expected_change_pct : float, optional
-            Expected percentage change for the same period.
+        OR
 
-        peer_changes : dict, optional
-            Percentage changes for comparable entities.
+        - Its deviation from expected exceeds the configured
+          expected-deviation threshold.
 
-            Example:
-            {
-                "Region B": 0.47,
-                "Region C": 0.45,
-                "Region D": -0.88
-            }
-
-        Returns
-        -------
-        dict
-            Materiality assessment.
+        If expected_change_pct is not available, only the
+        period-over-period rule is evaluated.
         """
 
-        # --------------------------------------------------
-        # Load materiality rules
-        # --------------------------------------------------
-
-        rules = self.registry.get_materiality_rules(
-            kpi_name
+        change_result = self.check_change(
+            kpi_name=kpi_name,
+            change_pct=change_pct
         )
 
-        minimum_absolute_change = rules[
-            "minimum_absolute_change_pct"
-        ]
-
-        minimum_expected_deviation = rules[
-            "minimum_deviation_from_expected_pct"
-        ]
-
-        # --------------------------------------------------
-        # Signal 1 — Absolute movement
-        # --------------------------------------------------
-
-        absolute_change = abs(change_pct)
-
-        exceeds_absolute_threshold = (
-            absolute_change
-            >= minimum_absolute_change
-        )
-
-        # --------------------------------------------------
-        # Signal 2 — Deviation from expected
-        # --------------------------------------------------
-
-        expected_deviation = None
-        exceeds_expected_threshold = False
+        expected_result = None
 
         if expected_change_pct is not None:
 
-            expected_deviation = (
-                change_pct - expected_change_pct
-            )
-
-            exceeds_expected_threshold = (
-                abs(expected_deviation)
-                >= minimum_expected_deviation
-            )
-
-        # --------------------------------------------------
-        # Signal 3 — Peer context
-        # --------------------------------------------------
-
-        peer_context = None
-        peer_outlier = False
-
-        if peer_changes:
-
-            peer_values = list(
-                peer_changes.values()
-            )
-
-            if peer_values:
-
-                peer_mean = sum(peer_values) / len(
-                    peer_values
+            expected_result = (
+                self.check_expected_deviation(
+                    kpi_name=kpi_name,
+                    actual_change_pct=change_pct,
+                    expected_change_pct=expected_change_pct
                 )
+            )
 
-                peer_context = {
-                    "peer_mean_change_pct": round(
-                        peer_mean,
-                        2
-                    ),
-                    "entity_change_pct": round(
-                        change_pct,
-                        2
-                    ),
-                    "difference_from_peer_mean_pct": round(
-                        change_pct - peer_mean,
-                        2
-                    ),
-                }
-
-                # A simple first-pass peer signal:
-                # flag if entity differs from peer mean
-                # by at least the absolute-change threshold.
-                peer_outlier = (
-                    abs(change_pct - peer_mean)
-                    >= minimum_absolute_change
-                )
-
-        # --------------------------------------------------
-        # Overall materiality decision
-        # --------------------------------------------------
-
-        signals = {
-            "absolute_change": exceeds_absolute_threshold,
-            "expected_deviation": exceeds_expected_threshold,
-            "peer_outlier": peer_outlier,
-        }
-
-        positive_signals = sum(
-            signals.values()
+        is_material = (
+            change_result["is_material"]
         )
 
-        # --------------------------------------------------
-        # Classification
-        # --------------------------------------------------
+        if expected_result is not None:
 
-        if positive_signals >= 2:
+            is_material = (
+                is_material
+                or expected_result["is_material"]
+            )
 
-            materiality = "HIGH"
+        if is_material:
 
-        elif positive_signals == 1:
-
-            materiality = "MEDIUM"
+            decision = "INVESTIGATE"
 
         else:
 
-            materiality = "LOW"
+            decision = "NO_INVESTIGATION"
 
-        # --------------------------------------------------
-        # Investigation decision
-        # --------------------------------------------------
-
-        investigate = materiality in {
-            "HIGH",
-            "MEDIUM"
-        }
-
-        # --------------------------------------------------
-        # Build result
-        # --------------------------------------------------
-
-        result = {
-
+        return {
             "kpi": kpi_name,
-
-            "observed_change_pct": round(
-                change_pct,
-                2
-            ),
-
-            "expected_change_pct": (
-                round(
-                    expected_change_pct,
-                    2
-                )
-                if expected_change_pct is not None
-                else None
-            ),
-
-            "deviation_from_expected_pct": (
-                round(
-                    expected_deviation,
-                    2
-                )
-                if expected_deviation is not None
-                else None
-            ),
-
-            "thresholds": {
-                "minimum_absolute_change_pct":
-                    minimum_absolute_change,
-
-                "minimum_deviation_from_expected_pct":
-                    minimum_expected_deviation,
-            },
-
-            "signals": signals,
-
-            "peer_context": peer_context,
-
-            "materiality": materiality,
-
-            "investigate": investigate,
+            "is_material": is_material,
+            "decision": decision,
+            "period_change": change_result,
+            "expected_deviation": expected_result
         }
-
-        return result

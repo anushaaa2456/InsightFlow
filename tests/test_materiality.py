@@ -1,11 +1,9 @@
-from src.detection.materiality import MaterialityEngine
+from src.detection.materiality import (
+    MaterialityEngine
+)
 
 
-def test_large_revenue_decline_is_material():
-    """
-    A 5.59% decline should trigger materiality because
-    it exceeds the configured absolute-change threshold.
-    """
+def test_material_change():
 
     engine = MaterialityEngine()
 
@@ -14,120 +12,81 @@ def test_large_revenue_decline_is_material():
         change_pct=-5.59
     )
 
-    assert result["signals"]["absolute_change"] is True
+    assert result["is_material"] is True
 
-    assert result["materiality"] == "MEDIUM"
+    assert result["decision"] == (
+        "INVESTIGATE"
+    )
 
-    assert result["investigate"] is True
 
-
-def test_small_revenue_change_is_low_materiality():
-    """
-    A small movement below the configured threshold
-    should not trigger investigation by itself.
-    """
+def test_small_change_is_not_material():
 
     engine = MaterialityEngine()
 
     result = engine.evaluate(
         kpi_name="revenue",
-        change_pct=-0.80
+        change_pct=-1.5
     )
 
-    assert result["signals"]["absolute_change"] is False
+    assert result["is_material"] is False
 
-    assert result["materiality"] == "LOW"
+    assert result["decision"] == (
+        "NO_INVESTIGATION"
+    )
 
-    assert result["investigate"] is False
 
-
-def test_expected_deviation_increases_materiality():
-    """
-    A movement that is materially worse than expected
-    should trigger the expected-deviation signal.
-    """
+def test_expected_deviation_triggers_investigation():
 
     engine = MaterialityEngine()
 
     result = engine.evaluate(
         kpi_name="revenue",
-        change_pct=-5.59,
-        expected_change_pct=-1.00
+        change_pct=-8.0,
+        expected_change_pct=-1.0
     )
 
-    assert result["deviation_from_expected_pct"] == -4.59
+    assert result["is_material"] is True
 
-    assert result["signals"]["absolute_change"] is True
-
-    assert result["signals"]["expected_deviation"] is True
-
-    assert result["materiality"] == "HIGH"
-
-    assert result["investigate"] is True
+    assert result["decision"] == (
+        "INVESTIGATE"
+    )
 
 
-def test_peer_context():
-    """
-    Region A should be identified as materially different
-    from its peers.
-    """
+def test_change_below_threshold_but_expected_deviation_is_material():
 
     engine = MaterialityEngine()
 
     result = engine.evaluate(
         kpi_name="revenue",
-        change_pct=-5.59,
-        peer_changes={
-            "Region B": 0.47,
-            "Region C": 0.45,
-            "Region D": -0.88
-        }
+        change_pct=-2.5,
+        expected_change_pct=0.0
     )
 
-    assert result["peer_context"] is not None
+    assert result["period_change"]["is_material"] is False
 
     assert (
-        result["signals"]["peer_outlier"]
+        result["expected_deviation"]["is_material"]
         is True
     )
 
-    assert result["investigate"] is True
+    assert result["is_material"] is True
 
 
-def test_expected_change_can_be_zero():
-    """
-    The engine should correctly handle an expected change of zero.
-    """
+def test_expected_deviation_can_be_non_material():
 
     engine = MaterialityEngine()
 
     result = engine.evaluate(
         kpi_name="revenue",
-        change_pct=4.50,
-        expected_change_pct=0.00
+        change_pct=-2.5,
+        expected_change_pct=-1.5
     )
 
-    assert result[
-        "deviation_from_expected_pct"
-    ] == 4.50
+    assert result["period_change"]["is_material"] is False
 
-    assert result[
-        "signals"
-    ]["expected_deviation"] is True
-
-
-def test_positive_change_can_be_material():
-    """
-    Materiality should work for large positive movements too.
-    """
-
-    engine = MaterialityEngine()
-
-    result = engine.evaluate(
-        kpi_name="revenue",
-        change_pct=6.00
+    assert (
+        result["expected_deviation"]["is_material"]
+        is False
     )
 
-    assert result["signals"]["absolute_change"] is True
-
-    assert result["investigate"] is True
+    assert result["is_material"] is False
