@@ -6,6 +6,8 @@
 [![Architecture: Hybrid AI](https://img.shields.io/badge/Architecture-Deterministic%20%2B%20LLM-emerald.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> **Delivered by Team Innovators:** **Niraj** &nbsp;|&nbsp; **Sneha** &nbsp;|&nbsp; **Anusha**
+
 ---
 
 ## Table of Contents
@@ -27,6 +29,7 @@
 16. [Setup / Environment Variables](#16-setup--environment-variables)
 17. [Execution Instructions](#17-execution-instructions)
 18. [Demo Scenarios and Limitations](#18-demo-scenarios-and-limitations)
+19. [Team & Attribution](#19-team--attribution)
 
 ---
 
@@ -328,4 +331,12 @@ Open your browser and navigate to **`http://localhost:8501`**.
 - **Automated Execution:** Prescribed recommendations currently require human approval; future releases will support automated webhook triggers (Jira, SAP, Salesforce).
 
 ---
-*Developed for the Accenture Innovation Challenge 2026.*
+## 19. Team & Attribution
+
+**Team Innovators**
+- **Niraj** — *Product, LLM & Decision Architecture*
+- **Sneha** — *Analytics & Machine Learning Engineering*
+- **Anusha** — *Data Engineering & Semantic Layer*
+
+---
+*Developed for the Accenture Innovation Challenge 2026 — Round 2.*
